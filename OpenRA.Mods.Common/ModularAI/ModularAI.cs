@@ -35,7 +35,6 @@ namespace OpenRA.Mods.Common.AI
 	{
 		string Name { get; }
 		void Tick(Actor self);
-		bool IsEnabled(Actor self);
 	}
 
 	public class ModularAI : ITick, IBot
@@ -102,7 +101,7 @@ namespace OpenRA.Mods.Common.AI
 		{
 			FindIdleUnits(self);
 
-			foreach (var mod in modules.Where(m => m.IsEnabled(self)))
+			foreach (var mod in modules)
 				mod.Tick(self);
 		}
 

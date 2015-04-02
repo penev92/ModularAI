@@ -50,11 +50,6 @@ namespace OpenRA.Mods.Common.AI
 			ai.RegisterModule(this);
 		}
 
-		public bool IsEnabled(Actor self)
-		{
-			return true;
-		}
-
 		public void Tick(Actor self)
 		{
 			idleBaseBuilders = ai.Idlers.Where(a => info.BaseBuilderTypes.Contains(a.Info.Name));

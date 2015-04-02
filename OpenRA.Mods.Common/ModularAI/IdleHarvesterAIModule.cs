@@ -40,11 +40,6 @@ namespace OpenRA.Mods.Common.AI
 			ai.RegisterModule(this);
 		}
 
-		public bool IsEnabled(Actor self)
-		{
-			return true;
-		}
-
 		public void Tick(Actor self)
 		{
 			idleHarvs = ai.Idlers.Where(a => info.HarvesterTypes.Contains(a.Info.Name));
