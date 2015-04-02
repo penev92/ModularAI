@@ -15,8 +15,18 @@ namespace OpenRA.Mods.Common.Traits
 {
 	public class AIQueryableInfo : ITraitInfo
 	{
-		[Desc("infantry, vehicle, aircraft, .. base-defense, anti-vehicle, hero, ..")]
-		public readonly string[] Types = { };
+		[Desc("The attacking category for this actor. You may want to attack a heavily fortified position with certain units." +
+		"Examples: anti-infantry, hit-and-run, mechs, ..")]
+		public readonly string[] AttackCategories = { };
+
+		[Desc("Can attack actors whose TargetableTypes contains any member of this list.")]
+		public readonly string[] AttackableTypes = { };
+
+		[Desc("Can *not* target actors in this list, regardless of AttackableTypes.")]
+		public readonly string[] UnattackbleTypes = { };
+
+		[Desc("Can be targeted by actors whose AttackableTypes contains any member of this list.")]
+		public readonly string[] TargetableTypes = { "any" };
 
 		public object Create(ActorInitializer init) { return new AIQueryable(init.Self, this); }
 	}

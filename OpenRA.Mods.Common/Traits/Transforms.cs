@@ -44,15 +44,16 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Transforms : IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public readonly TransformsInfo Info;
+
 		readonly Actor self;
-		readonly TransformsInfo info;
 		readonly BuildingInfo buildingInfo;
 		readonly string race;
 
 		public Transforms(ActorInitializer init, TransformsInfo info)
 		{
 			self = init.Self;
-			this.info = info;
+			Info = info;
 			buildingInfo = self.World.Map.Rules.Actors[info.IntoActor].Traits.GetOrDefault<BuildingInfo>();
 			race = init.Contains<RaceInit>() ? init.Get<RaceInit, string>() : self.Owner.Country.Race;
 		}
@@ -68,7 +69,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (building != null && building.Locked)
 				return false;
 
-			return buildingInfo == null || self.World.CanPlaceBuilding(info.IntoActor, buildingInfo, self.Location + info.Offset, self);
+			return buildingInfo == null || self.World.CanPlaceBuilding(Info.IntoActor, buildingInfo, self.Location + Info.Offset, self);
 		}
 
 		public IEnumerable<IOrderTargeter> Orders
@@ -89,10 +90,10 @@ namespace OpenRA.Mods.Common.Traits
 			var building = self.TraitOrDefault<Building>();
 			if (!CanDeploy() || (building != null && !building.Lock()))
 			{
-				foreach (var s in info.NoTransformSounds)
+				foreach (var s in Info.NoTransformSounds)
 					Sound.PlayToPlayer(self.Owner, s);
 
-				Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.NoTransformNotification, self.Owner.Country.Race);
+				Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", Info.NoTransformNotification, self.Owner.Country.Race);
 
 				return;
 			}
@@ -101,17 +102,17 @@ namespace OpenRA.Mods.Common.Traits
 				self.CancelActivity();
 
 			if (self.HasTrait<IFacing>())
-				self.QueueActivity(new Turn(self, info.Facing));
+				self.QueueActivity(new Turn(self, Info.Facing));
 
 			foreach (var nt in self.TraitsImplementing<INotifyTransform>())
 				nt.BeforeTransform(self);
 
-			var transform = new Transform(self, info.IntoActor)
+			var transform = new Transform(self, Info.IntoActor)
 			{
-				Offset = info.Offset,
-				Facing = info.Facing,
-				Sounds = info.TransformSounds,
-				Notification = info.TransformNotification,
+				Offset = Info.Offset,
+				Facing = Info.Facing,
+				Sounds = Info.TransformSounds,
+				Notification = Info.TransformNotification,
 				Race = race
 			};
 

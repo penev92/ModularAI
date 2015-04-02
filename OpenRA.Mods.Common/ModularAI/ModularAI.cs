@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Traits;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Mods.Common.Activities;
 
 namespace OpenRA.Mods.Common.AI
 {
@@ -23,16 +24,16 @@ namespace OpenRA.Mods.Common.AI
 
 		string IBotInfo.Name { get { return Name; } }
 
-		[Desc("Number of ticks to wait between updating activities.")]
+		[Desc("Number of ticks to wait between updating activities. Default evaluates to 2 seconds.")]
 		public readonly int UpdateDelay = 25 * 2;
 
-		[Desc("Each item in this list is appended with 'attacking-' and queried against their AIQueryable trait.")]
-		public readonly string[] AttackingTypes = { };
+		// TODO: The AI should be a state-machine for repairing, power, cash, base management, etc.
 
-		// TODO: Possibly move all of the types (attacking, support, base-builder, anti-*) to AIQueryable
-		// and have the ai only deal with filtering, issuing orders, and being a state-machine
-		// for repairing, power, cash, base management, etc.
-		// Essentially cutting out the string mangling (attacking- prefix, and similar).
+		[Desc("Actor type names. Not deployed factories. Typically MCVs. Must have the `Transforms` trait.")]
+		public readonly string[] BaseBuilderActorTypes = { "mcv" };
+
+		[Desc("Minimum number of cells to put between each base builder before attempting to deploy.")]
+		public readonly int BaseExpansionRadius = 5;
 
 		public object Create(ActorInitializer init) { return new ModularAI(init, this); }
 	}
@@ -48,83 +49,135 @@ namespace OpenRA.Mods.Common.AI
 		}
 
 		public IBotInfo Info { get { return info; } }
-
 		public Player Player { get; private set; }
 
-		readonly ModularAIInfo info;
+		protected IEnumerable<Actor> Idlers;
+
 		readonly World world;
+		readonly ModularAIInfo info;
+		readonly int expansionRadius;
+
 		bool botEnabled;
+		int updateWaitCountdown;
+
+		CPos? tryGetLatestConyardAtCell;
+		uint latestDeployedBaseBuilder;
+		Actor mainBaseBuilding;
 
 		public ModularAI(ActorInitializer init, ModularAIInfo info)
 		{
 			world = init.World;
 			this.info = info;
+			expansionRadius = info.BaseExpansionRadius;
 		}
 
-		int updateWaitCountdown;
 		public void Tick(Actor self)
 		{
-			if (!botEnabled)
+			if (!botEnabled || Player.WinState == WinState.Lost)
 				return;
+
+			// Needs to be called once before handing over to TickInner
+			FindIdleUnits(self);
 
 			if (--updateWaitCountdown > 0)
 				return;
 
 			updateWaitCountdown = info.UpdateDelay;
-
-			OrderIdleUnits(self);
+			TickInner(self);
 		}
 
-		void OrderIdleUnits(Actor self)
+		protected virtual void TickInner(Actor self)
 		{
-			var idles = world.Actors.Where(a =>
+			FindIdleUnits(self);
+
+			OrderIdleAttackers();
+
+			var baseBuilders = FindIdleBaseBuilders(self);
+			OrderIdleBaseBuilders(baseBuilders);
+		}
+
+		protected virtual void FindIdleUnits(Actor self)
+		{
+			Idlers = world.Actors.Where(a =>
 				!a.IsDead &&
 				a.IsInWorld &&
 				a.Owner == self.Owner &&
 				a.IsIdle &&
 				a.HasTrait<AIQueryable>());
-
-			var attackers = idles.Where(a =>
-			{
-				// Example:
-				// If AttackingTypes contains 'infantry'
-				// and AIQueryable.Types contains 'attacking-infantry'
-				// we have found a match.
-
-				if (!a.HasTrait<AttackBase>())
-					return false;
-
-				var key = "attacking-";
-
-				var types = a.Info.Traits.Get<AIQueryableInfo>().Types;
-				if (!types.Any(t => t.StartsWith(key)))
-				{
-					Debug("{0} has no types starting with " + key, a.Info.Name);
-					return false;
-				}
-
-				foreach (var type in types.Where(t => t.StartsWith(key)))
-				{
-					var nonPrefixedType = type.SubstringAfter('-');
-
-					if (string.IsNullOrWhiteSpace(nonPrefixedType))
-						throw new YamlException("Bogus AIQueryable type `{0}` on actor type `{1}`.".F(type, a.Info.Name));
-
-					if (info.AttackingTypes.Contains(nonPrefixedType))
-						return true;
-				}
-
-				return false;
-			});
-
-			OrderIdleAttackers(attackers);
 		}
 
-		void OrderIdleAttackers(IEnumerable<Actor> attackers)
+		protected virtual IEnumerable<Actor> FindIdleBaseBuilders(Actor self)
 		{
+			return Idlers.Where(a => info.BaseBuilderActorTypes.Contains(a.Info.Name));
+		}
+
+		protected virtual void OrderIdleBaseBuilders(IEnumerable<Actor> builders)
+		{
+			foreach (var builder in builders)
+			{
+				var tryDeploy = new Order("DeployTransform", builder, true);
+
+				if (mainBaseBuilding != null)
+				{
+					if (builder.IsMoving())
+						continue;
+
+					var transforms = builder.Trait<Transforms>();
+					var deployInto = transforms.Info.IntoActor;
+
+					var srcCell = world.Map.CellContaining(builder.CenterPosition);
+					var targetCell = world.Map.FindTilesInAnnulus(
+						srcCell,
+						expansionRadius,
+						expansionRadius + expansionRadius / 2 /* TODO: non-random value */)
+						.Where(world.Map.Contains)
+						.MinBy(c => (c - srcCell).LengthSquared);
+
+					Debug("Try to deploy into {0} at {1}.", deployInto, targetCell);
+
+					var moveToDest = new Order("Move", builder, true)
+					{
+						TargetLocation = targetCell
+					};
+
+					world.AddFrameEndTask(w =>
+					{
+						w.IssueOrder(moveToDest);
+						w.IssueOrder(tryDeploy);
+					});
+
+					continue;
+				}
+				else if (tryGetLatestConyardAtCell.HasValue)
+				{
+					var atCell = world.ActorMap.GetUnitsAt(tryGetLatestConyardAtCell.Value);
+					if (atCell.Count() > 1 || atCell.First().ActorID != latestDeployedBaseBuilder)
+					{
+						tryGetLatestConyardAtCell = null;
+						continue;
+					}
+
+					mainBaseBuilding = atCell.First();
+					continue;
+				}
+					
+				world.AddFrameEndTask(w =>
+				{
+					tryDeploy.TargetLocation = world.Map.CellContaining(builder.CenterPosition);
+					w.IssueOrder(tryDeploy);
+					tryGetLatestConyardAtCell = tryDeploy.TargetLocation;
+					latestDeployedBaseBuilder = builder.ActorID;
+				});
+			}
+		}
+
+		protected virtual void OrderIdleAttackers()
+		{
+			var attackers = Idlers.Where(a => a.HasTrait<AttackBase>());
+
 			foreach (var attacker in attackers)
 			{
-				var target = RandomTargetableActor(attacker);
+				var target = ClosestTargetableActor(attacker, attacker.Info.Traits.Get<AIQueryableInfo>());
 				if (target == null || target.IsDead || !target.IsInWorld)
 					continue;
 
@@ -140,20 +193,36 @@ namespace OpenRA.Mods.Common.AI
 			}
 		}
 
-		// TODO: TargetableTypes
-		static Actor RandomTargetableActor(Actor attacker)
+		protected virtual Actor ClosestTargetableActor(Actor attacker, AIQueryableInfo attackerAIQ)
 		{
 			var attack = attacker.Trait<AttackBase>();
 
-			var targets = attacker.World.Actors.Where(a =>
-				!a.Owner.IsAlliedWith(attacker.Owner) &&
-				attack.HasAnyValidWeapons(Target.FromActor(a)));
+			var targets = world.Actors.Where(a =>
+			{
+				if (a.IsDead || !a.IsInWorld)
+					return false;
 
-			var rand = Game.CosmeticRandom;
-			return targets.RandomOrDefault(rand);
+				if (a.AppearsFriendlyTo(attacker))
+					return false;
+
+				if (!a.HasTrait<TargetableUnit>())
+					return false;
+
+				var aiq = a.Info.Traits.GetOrDefault<AIQueryableInfo>();
+				if (aiq == null)
+					return false;
+
+				var typesMatch = attackerAIQ.AttackableTypes.Intersect(aiq.TargetableTypes).Any();
+				if (!typesMatch)
+					return false;
+
+				return attack.HasAnyValidWeapons(Target.FromActor(a));
+			});
+
+			return targets.ClosestTo(attacker);
 		}
 
-		void Debug(string message, params object[] fmt)
+		protected void Debug(string message, params object[] fmt)
 		{
 			if (!botEnabled)
 				return;

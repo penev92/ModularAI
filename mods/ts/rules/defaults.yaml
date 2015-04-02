@@ -60,7 +60,7 @@
 		InitialDelay: 0
 		CloakDelay: 90
 	AIQueryable:
-		Types: building
+		TargetableTypes: building
 
 ^CivBuilding:
 	Inherits: ^Building
@@ -235,7 +235,9 @@
 	MustBeDestroyed:
 	# TinyAI
 	AIQueryable:
-		Types: infantry, attacking-infantry
+		AttackCategories: any, infantry
+		AttackableTypes: any
+		TargetableTypes: any, infantry
 
 ^CivilianInfantry:
 	Inherits: ^Infantry
@@ -345,7 +347,9 @@
 		CloakDelay: 90
 	MustBeDestroyed:
 	AIQueryable:
-		Types: vehicle, attacking-vehicle
+		AttackCategories: any, vehicle
+		AttackableTypes: any
+		TargetableTypes: any, vehicle
 
 ^Tank:
 	AppearsOnRadar:
@@ -431,7 +435,9 @@
 		CloakDelay: 90
 	MustBeDestroyed:
 	AIQueryable:
-		Types: tank, attacking-tank
+		AttackCategories: any, tanks
+		AttackableTypes: any
+		TargetableTypes: any, tanks
 
 ^Helicopter:
 	AppearsOnRadar:
@@ -481,7 +487,10 @@
 	UpgradeManager:
 	MustBeDestroyed:
 	AIQueryable:
-		Types: aircraft, attacking-aircraft
+		AttackCategories: any, aircraft
+		AttackableTypes: any
+		TargetableTypes: any, aircraft
+
 ^BlossomTree:
 	Tooltip:
 		Name: Blossom Tree

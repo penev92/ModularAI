@@ -1,5 +1,4 @@
 Player:
 	ModularAI@test:
 		Name: ModularAI
-		# appended with attacking-
-		AttackingTypes: infantry, vehicle, tank
+
