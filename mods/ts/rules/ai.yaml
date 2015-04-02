@@ -3,4 +3,5 @@ Player:
 		Name: ModularAI
 	IdleHarvesterAIModule:
 		HarvesterTypes: harv
-
+	IdleBaseBuilderAIModule:
+		BaseBuilderTypes: mcv

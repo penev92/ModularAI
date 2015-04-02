@@ -29,12 +29,6 @@ namespace OpenRA.Mods.Common.AI
 
 		// TODO: The AI should be a state-machine for repairing, power, cash, base management, etc.
 
-		[Desc("Actor type names. Not deployed factories. Typically MCVs. Must have the `Transforms` trait.")]
-		public readonly string[] BaseBuilderActorTypes = { "mcv" };
-
-		[Desc("Minimum number of cells to put between each base builder before attempting to deploy.")]
-		public readonly int BaseExpansionRadius = 5;
-
 		public object Create(ActorInitializer init) { return new ModularAI(init, this); }
 	}
 
@@ -56,20 +50,16 @@ namespace OpenRA.Mods.Common.AI
 		}
 
 		public IBotInfo Info { get { return info; } }
+		public Actor MainBaseBuilding { get; protected set; }
 		public Player Player { get; private set; }
 
 		public IEnumerable<Actor> Idlers { get; private set; }
 
 		readonly World world;
 		readonly ModularAIInfo info;
-		readonly int expansionRadius;
 
 		bool botEnabled;
 		int updateWaitCountdown;
-
-		CPos? tryGetLatestConyardAtCell;
-		uint latestDeployedBaseBuilder;
-		Actor mainBaseBuilding;
 
 		List<IModularAI> modules;
 
@@ -77,8 +67,12 @@ namespace OpenRA.Mods.Common.AI
 		{
 			world = init.World;
 			this.info = info;
-			expansionRadius = info.BaseExpansionRadius;
 			modules = new List<IModularAI>();
+		}
+
+		public void SetMainBase(Actor mainBase)
+		{
+			MainBaseBuilding = mainBase;
 		}
 
 		public bool RegisterModule(IModularAI module)
@@ -113,9 +107,6 @@ namespace OpenRA.Mods.Common.AI
 				mod.Tick(self);
 
 			OrderIdleAttackers();
-
-			var baseBuilders = FindIdleBaseBuilders(self);
-			OrderIdleBaseBuilders(baseBuilders);
 		}
 
 		protected virtual void FindIdleUnits(Actor self)
@@ -126,71 +117,6 @@ namespace OpenRA.Mods.Common.AI
 				a.Owner == self.Owner &&
 				a.IsIdle &&
 				a.HasTrait<AIQueryable>());
-		}
-
-		protected virtual IEnumerable<Actor> FindIdleBaseBuilders(Actor self)
-		{
-			return Idlers.Where(a => info.BaseBuilderActorTypes.Contains(a.Info.Name));
-		}
-
-		protected virtual void OrderIdleBaseBuilders(IEnumerable<Actor> builders)
-		{
-			foreach (var builder in builders)
-			{
-				var tryDeploy = new Order("DeployTransform", builder, true);
-
-				if (mainBaseBuilding != null)
-				{
-					if (builder.IsMoving())
-						continue;
-
-					var transforms = builder.Trait<Transforms>();
-					var deployInto = transforms.Info.IntoActor;
-
-					var srcCell = world.Map.CellContaining(builder.CenterPosition);
-					var targetCell = world.Map.FindTilesInAnnulus(
-						srcCell,
-						expansionRadius,
-						expansionRadius + expansionRadius / 2 /* TODO: non-random value */)
-						.Where(world.Map.Contains)
-						.MinBy(c => (c - srcCell).LengthSquared);
-
-					Debug("Try to deploy into {0} at {1}.", deployInto, targetCell);
-
-					var moveToDest = new Order("Move", builder, true)
-					{
-						TargetLocation = targetCell
-					};
-
-					world.AddFrameEndTask(w =>
-					{
-						w.IssueOrder(moveToDest);
-						w.IssueOrder(tryDeploy);
-					});
-
-					continue;
-				}
-				else if (tryGetLatestConyardAtCell.HasValue)
-				{
-					var atCell = world.ActorMap.GetUnitsAt(tryGetLatestConyardAtCell.Value);
-					if (atCell.Count() > 1 || atCell.First().ActorID != latestDeployedBaseBuilder)
-					{
-						tryGetLatestConyardAtCell = null;
-						continue;
-					}
-
-					mainBaseBuilding = atCell.First();
-					continue;
-				}
-					
-				world.AddFrameEndTask(w =>
-				{
-					tryDeploy.TargetLocation = world.Map.CellContaining(builder.CenterPosition);
-					w.IssueOrder(tryDeploy);
-					tryGetLatestConyardAtCell = tryDeploy.TargetLocation;
-					latestDeployedBaseBuilder = builder.ActorID;
-				});
-			}
 		}
 
 		protected virtual void OrderIdleAttackers()
@@ -244,7 +170,7 @@ namespace OpenRA.Mods.Common.AI
 			return targets.ClosestTo(attacker);
 		}
 
-		protected void Debug(string message, params object[] fmt)
+		public void Debug(string message, params object[] fmt)
 		{
 			if (!botEnabled)
 				return;

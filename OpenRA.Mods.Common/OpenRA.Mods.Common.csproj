@@ -624,6 +624,7 @@
     <Compile Include="ModularAI\ModularAI.cs" />
     <Compile Include="ModularAI\AIQueryable.cs" />
     <Compile Include="ModularAI\IdleHarvesterAIModule.cs" />
+    <Compile Include="ModularAI\IdleBaseBuilderAIModule.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
