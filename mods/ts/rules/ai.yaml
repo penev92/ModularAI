@@ -5,3 +5,5 @@ Player:
 		HarvesterTypes: harv
 	IdleBaseBuilderAIModule:
 		BaseBuilderTypes: mcv
+	AttackingAIModule:
+		UseAttackingCategories: any

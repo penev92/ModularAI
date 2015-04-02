@@ -13,7 +13,6 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Traits;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Mods.Common.Activities;
 
 namespace OpenRA.Mods.Common.AI
 {
@@ -105,8 +104,6 @@ namespace OpenRA.Mods.Common.AI
 
 			foreach (var mod in modules.Where(m => m.IsEnabled(self)))
 				mod.Tick(self);
-
-			OrderIdleAttackers();
 		}
 
 		protected virtual void FindIdleUnits(Actor self)
@@ -117,57 +114,6 @@ namespace OpenRA.Mods.Common.AI
 				a.Owner == self.Owner &&
 				a.IsIdle &&
 				a.HasTrait<AIQueryable>());
-		}
-
-		protected virtual void OrderIdleAttackers()
-		{
-			var attackers = Idlers.Where(a => a.HasTrait<AttackBase>());
-
-			foreach (var attacker in attackers)
-			{
-				var target = ClosestTargetableActor(attacker, attacker.Info.Traits.Get<AIQueryableInfo>());
-				if (target == null || target.IsDead || !target.IsInWorld)
-					continue;
-
-				world.AddFrameEndTask(w =>
-				{
-					w.IssueOrder(new Order("Attack", attacker, false)
-					{
-						TargetActor = target
-					});
-
-					Debug("{0} to attack {1} ({2})", attacker.Info.Name, target.Info.Name, OwnerString(target));
-				});
-			}
-		}
-
-		protected virtual Actor ClosestTargetableActor(Actor attacker, AIQueryableInfo attackerAIQ)
-		{
-			var attack = attacker.Trait<AttackBase>();
-
-			var targets = world.Actors.Where(a =>
-			{
-				if (a.IsDead || !a.IsInWorld)
-					return false;
-
-				if (a.AppearsFriendlyTo(attacker))
-					return false;
-
-				if (!a.HasTrait<TargetableUnit>())
-					return false;
-
-				var aiq = a.Info.Traits.GetOrDefault<AIQueryableInfo>();
-				if (aiq == null)
-					return false;
-
-				var typesMatch = attackerAIQ.AttackableTypes.Intersect(aiq.TargetableTypes).Any();
-				if (!typesMatch)
-					return false;
-
-				return attack.HasAnyValidWeapons(Target.FromActor(a));
-			});
-
-			return targets.ClosestTo(attacker);
 		}
 
 		public void Debug(string message, params object[] fmt)
@@ -183,12 +129,12 @@ namespace OpenRA.Mods.Common.AI
 			Console.WriteLine(message);
 		}
 
-		static string OwnerString(Actor a)
+		public static string OwnerString(Actor a)
 		{
 			return OwnerString(a.Owner);
 		}
 
-		static string OwnerString(Player p)
+		public static string OwnerString(Player p)
 		{
 			var n = p.PlayerName;
 			return p.IsBot ? n + "_" + p.ClientIndex.ToString()
