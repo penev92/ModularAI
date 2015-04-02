@@ -621,6 +621,8 @@
     <Compile Include="Graphics\TilesetSpecificSpriteSequence.cs" />
     <Compile Include="Traits\Pluggable.cs" />
     <Compile Include="Traits\Plug.cs" />
+    <Compile Include="ModularAI\ModularAI.cs" />
+    <Compile Include="ModularAI\AIQueryable.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
@@ -635,4 +637,7 @@ cd "$(SolutionDir)"</PostBuildEvent>
   <Target Name="AfterBuild">
   </Target>
   -->
+  <ItemGroup>
+    <Folder Include="ModularAI\" />
+  </ItemGroup>
 </Project>
