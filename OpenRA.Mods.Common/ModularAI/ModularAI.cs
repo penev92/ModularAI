@@ -38,6 +38,13 @@ namespace OpenRA.Mods.Common.AI
 		public object Create(ActorInitializer init) { return new ModularAI(init, this); }
 	}
 
+	public interface IModularAI
+	{
+		string Name { get; }
+		void Tick(Actor self);
+		bool IsEnabled(Actor self);
+	}
+
 	public class ModularAI : ITick, IBot
 	{
 		public void Activate(Player p)
@@ -51,7 +58,7 @@ namespace OpenRA.Mods.Common.AI
 		public IBotInfo Info { get { return info; } }
 		public Player Player { get; private set; }
 
-		protected IEnumerable<Actor> Idlers;
+		public IEnumerable<Actor> Idlers { get; private set; }
 
 		readonly World world;
 		readonly ModularAIInfo info;
@@ -64,11 +71,23 @@ namespace OpenRA.Mods.Common.AI
 		uint latestDeployedBaseBuilder;
 		Actor mainBaseBuilding;
 
+		List<IModularAI> modules;
+
 		public ModularAI(ActorInitializer init, ModularAIInfo info)
 		{
 			world = init.World;
 			this.info = info;
 			expansionRadius = info.BaseExpansionRadius;
+			modules = new List<IModularAI>();
+		}
+
+		public bool RegisterModule(IModularAI module)
+		{
+			if (modules.Contains(module))
+				return false;
+
+			modules.Add(module);
+			return true;
 		}
 
 		public void Tick(Actor self)
@@ -89,6 +108,9 @@ namespace OpenRA.Mods.Common.AI
 		protected virtual void TickInner(Actor self)
 		{
 			FindIdleUnits(self);
+
+			foreach (var mod in modules.Where(m => m.IsEnabled(self)))
+				mod.Tick(self);
 
 			OrderIdleAttackers();
 

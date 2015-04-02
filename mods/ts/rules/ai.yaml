@@ -1,4 +1,6 @@
 Player:
 	ModularAI@test:
 		Name: ModularAI
+	IdleHarvesterAIModule:
+		HarvesterTypes: harv
 
